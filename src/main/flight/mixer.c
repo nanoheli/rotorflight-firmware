@@ -541,8 +541,9 @@ static void mixerUpdateInputs(void)
     // Update governor sub-mixer
     governorUpdate();
 
-    // Update throttle from governor
-    mixerSetInput(MIXER_IN_STABILIZED_THROTTLE, getGovernorOutput());
+    // Update throttle from governor(s). Motor 2's governor (if enabled) drives ST2.
+    for (int i = 0; i < GOV_MAX_MOTORS; i++)
+        mixerSetInput(MIXER_IN_STABILIZED_THROTTLE + i, getGovernorOutput(i));
 
     // Update motorized tail (must be done after governor)
     mixerUpdateMotorizedTail();

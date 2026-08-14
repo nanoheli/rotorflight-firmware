@@ -44,6 +44,11 @@ typedef struct {
     uint16_t   requestHS;
 } govLogData_t;
 
+// Maximum number of independent governor instances (one per motor). Instance 0 is
+// always the primary/master governor. Instance 1 is used for a second motor/ESC
+// (e.g. a twin-motor tandem-rotor aircraft) when gov_dual_motor is enabled.
+#define GOV_MAX_MOTORS    2
+
 void governorInit(const pidProfile_t *pidProfile);
 void governorInitProfile(const pidProfile_t *pidProfile);
 
@@ -54,7 +59,7 @@ void setGovernorEnabled(bool enabled);
 
 int getGovernorState(void);
 
-float getGovernorOutput(void);
+float getGovernorOutput(uint8_t motor);
 
 void getGovernorLogData(govLogData_t *data);
 

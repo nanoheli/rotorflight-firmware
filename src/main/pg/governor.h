@@ -72,6 +72,7 @@ typedef struct {
 typedef struct governorConfig_s {
     uint8_t  gov_mode;
     uint8_t  gov_throttle_type;
+    uint8_t  gov_dual_motor;
     uint16_t gov_startup_time;
     uint16_t gov_spoolup_time;
     uint16_t gov_tracking_time;

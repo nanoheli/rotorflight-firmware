@@ -58,6 +58,10 @@ void pgResetFn_mixerInputs(mixerInput_t *input)
     input[MIXER_IN_STABILIZED_THROTTLE].min  =  0;
     input[MIXER_IN_STABILIZED_THROTTLE].max  =  1000;
 
+    input[MIXER_IN_STABILIZED_THROTTLE2].rate =  1000;
+    input[MIXER_IN_STABILIZED_THROTTLE2].min  =  0;
+    input[MIXER_IN_STABILIZED_THROTTLE2].max  =  1000;
+
     for (int i = MIXER_IN_RC_COMMAND_ROLL; i <= MIXER_IN_RC_CHANNEL_18; i++) {
         input[i].rate =  1000;
         input[i].min  = -1000;

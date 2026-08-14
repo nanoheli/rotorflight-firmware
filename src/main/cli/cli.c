@@ -291,6 +291,7 @@ static const char * const mixerInputNames[] = {
     [MIXER_IN_STABILIZED_YAW]        = "SY",
     [MIXER_IN_STABILIZED_COLLECTIVE] = "SC",
     [MIXER_IN_STABILIZED_THROTTLE]   = "ST",
+    [MIXER_IN_STABILIZED_THROTTLE2]  = "ST2",
     [MIXER_IN_RC_COMMAND_ROLL]       = "CR",
     [MIXER_IN_RC_COMMAND_PITCH]      = "CP",
     [MIXER_IN_RC_COMMAND_YAW]        = "CY",

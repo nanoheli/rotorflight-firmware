@@ -229,7 +229,30 @@ typedef struct {
 
 } govData_t;
 
-static FAST_DATA_ZERO_INIT govData_t gov;
+// One governor instance per motor. Instance 0 is always the primary/master
+// governor (also used for state/output queries that are not motor specific).
+// Instance 1 is only active when gov_dual_motor is enabled, allowing a second
+// motor/ESC (e.g. a twin-motor tandem-rotor aircraft) to be governed to the
+// exact same headspeed target using identical PID parameters.
+static FAST_DATA_ZERO_INIT govData_t govInstances[GOV_MAX_MOTORS];
+
+// Index of the instance currently being processed. Always reset to 0 (the
+// master instance) once a multi-instance loop finishes, so that any code
+// querying governor state outside of governorUpdate()/governorInit*() always
+// sees the master instance.
+static FAST_DATA_ZERO_INIT uint8_t govActiveMotor;
+
+// Transparent accessor for the "active" governor instance. This allows all of
+// the existing single-instance governor logic below to remain unchanged while
+// still supporting multiple independent governor instances.
+#define gov govInstances[govActiveMotor]
+
+// Applies a statement (or block) to every governor instance, leaving
+// govActiveMotor reset to the master instance (0) afterwards. Used to keep
+// the cached runtime gains of all instances in sync when a shared gain is
+// changed live (e.g. via RC adjustment channels).
+#define GOV_FOR_EACH_INSTANCE \
+    for (govActiveMotor = 0; govActiveMotor < GOV_MAX_MOTORS; govActiveMotor++)
 
 
 //// Prototypes
@@ -245,9 +268,9 @@ int getGovernorState(void)
     return gov.state;
 }
 
-float getGovernorOutput(void)
+float getGovernorOutput(uint8_t motor)
 {
-    return gov.throttleOutput;
+    return govInstances[(motor < GOV_MAX_MOTORS) ? motor : 0].throttleOutput;
 }
 
 float getTTAIncrease(void)
@@ -569,8 +592,9 @@ static void govDataUpdate(void)
     // Calculate effective throttle
     govGetInputThrottle();
 
-    // Assume motor[0]
-    const float motorRPM = getMotorRawRPMf(0);
+    // Assume motor[0] for a single-motor setup, or the corresponding motor
+    // when this is a per-motor governor instance (gov_dual_motor)
+    const float motorRPM = getMotorRawRPMf(govActiveMotor);
 
     // RPM signal is noisy - filtering is required
     const float filteredRPM = filterApply(&gov.motorRPMFilter, motorRPM);
@@ -1271,7 +1295,9 @@ int get_ADJUSTMENT_GOV_GAIN(void)
 void set_ADJUSTMENT_GOV_GAIN(int value)
 {
     currentPidProfile->governor.gain = value;
-    gov.K = currentPidProfile->governor.gain / 100.0f;
+    GOV_FOR_EACH_INSTANCE
+        gov.K = currentPidProfile->governor.gain / 100.0f;
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_P_GAIN(void)
@@ -1282,7 +1308,9 @@ int get_ADJUSTMENT_GOV_P_GAIN(void)
 void set_ADJUSTMENT_GOV_P_GAIN(int value)
 {
     currentPidProfile->governor.p_gain = value;
-    gov.Kp = currentPidProfile->governor.p_gain / 10.0f;
+    GOV_FOR_EACH_INSTANCE
+        gov.Kp = currentPidProfile->governor.p_gain / 10.0f;
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_I_GAIN(void)
@@ -1293,7 +1321,9 @@ int get_ADJUSTMENT_GOV_I_GAIN(void)
 void set_ADJUSTMENT_GOV_I_GAIN(int value)
 {
     currentPidProfile->governor.i_gain = value;
-    gov.Ki = currentPidProfile->governor.i_gain / 10.0f;
+    GOV_FOR_EACH_INSTANCE
+        gov.Ki = currentPidProfile->governor.i_gain / 10.0f;
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_D_GAIN(void)
@@ -1304,7 +1334,9 @@ int get_ADJUSTMENT_GOV_D_GAIN(void)
 void set_ADJUSTMENT_GOV_D_GAIN(int value)
 {
     currentPidProfile->governor.d_gain = value;
-    gov.Kd = currentPidProfile->governor.d_gain / 1000.0f;
+    GOV_FOR_EACH_INSTANCE
+        gov.Kd = currentPidProfile->governor.d_gain / 1000.0f;
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_F_GAIN(void)
@@ -1315,7 +1347,9 @@ int get_ADJUSTMENT_GOV_F_GAIN(void)
 void set_ADJUSTMENT_GOV_F_GAIN(int value)
 {
     currentPidProfile->governor.f_gain = value;
-    gov.Kf = currentPidProfile->governor.f_gain / 100.0f;
+    GOV_FOR_EACH_INSTANCE
+        gov.Kf = currentPidProfile->governor.f_gain / 100.0f;
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_TTA_GAIN(void)
@@ -1326,7 +1360,9 @@ int get_ADJUSTMENT_GOV_TTA_GAIN(void)
 void set_ADJUSTMENT_GOV_TTA_GAIN(int value)
 {
     currentPidProfile->governor.tta_gain = value;
-    govInitTTA((const pidProfile_t *)currentPidProfile);
+    GOV_FOR_EACH_INSTANCE
+        govInitTTA((const pidProfile_t *)currentPidProfile);
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_CYCLIC_FF(void)
@@ -1337,7 +1373,9 @@ int get_ADJUSTMENT_GOV_CYCLIC_FF(void)
 void set_ADJUSTMENT_GOV_CYCLIC_FF(int value)
 {
     currentPidProfile->governor.cyclic_weight = value;
-    gov.cyclicWeight = currentPidProfile->governor.cyclic_weight / 100.0f;
+    GOV_FOR_EACH_INSTANCE
+        gov.cyclicWeight = currentPidProfile->governor.cyclic_weight / 100.0f;
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_COLLECTIVE_FF(void)
@@ -1348,7 +1386,9 @@ int get_ADJUSTMENT_GOV_COLLECTIVE_FF(void)
 void set_ADJUSTMENT_GOV_COLLECTIVE_FF(int value)
 {
     currentPidProfile->governor.collective_weight = value;
-    gov.collectiveWeight = currentPidProfile->governor.collective_weight / 100.0f;
+    GOV_FOR_EACH_INSTANCE
+        gov.collectiveWeight = currentPidProfile->governor.collective_weight / 100.0f;
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_IDLE_THROTTLE(void)
@@ -1359,9 +1399,12 @@ int get_ADJUSTMENT_GOV_IDLE_THROTTLE(void)
 void set_ADJUSTMENT_GOV_IDLE_THROTTLE(int value)
 {
     validateAndSetIdleAutoThrottle(value, governorConfig()->gov_auto_throttle);
-    gov.autoThrottle = governorConfig()->gov_auto_throttle / 1000.0f;
-    gov.idleThrottle = governorConfig()->gov_idle_throttle / 1000.0f;
-    gov.minSpoolupThrottle = gov.idleThrottle;
+    GOV_FOR_EACH_INSTANCE {
+        gov.autoThrottle = governorConfig()->gov_auto_throttle / 1000.0f;
+        gov.idleThrottle = governorConfig()->gov_idle_throttle / 1000.0f;
+        gov.minSpoolupThrottle = gov.idleThrottle;
+    }
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_AUTO_THROTTLE(void)
@@ -1372,9 +1415,12 @@ int get_ADJUSTMENT_GOV_AUTO_THROTTLE(void)
 void set_ADJUSTMENT_GOV_AUTO_THROTTLE(int value)
 {
     validateAndSetIdleAutoThrottle(governorConfig()->gov_idle_throttle, value);
-    gov.autoThrottle = governorConfig()->gov_auto_throttle / 1000.0f;
-    gov.idleThrottle = governorConfig()->gov_idle_throttle / 1000.0f;
-    gov.minSpoolupThrottle = gov.idleThrottle;
+    GOV_FOR_EACH_INSTANCE {
+        gov.autoThrottle = governorConfig()->gov_auto_throttle / 1000.0f;
+        gov.idleThrottle = governorConfig()->gov_idle_throttle / 1000.0f;
+        gov.minSpoolupThrottle = gov.idleThrottle;
+    }
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_MAX_THROTTLE(void)
@@ -1385,9 +1431,12 @@ int get_ADJUSTMENT_GOV_MAX_THROTTLE(void)
 void set_ADJUSTMENT_GOV_MAX_THROTTLE(int value)
 {
     validateAndSetMinMaxThrottle(currentPidProfile->governor.min_throttle, value);
-    gov.maxThrottle = currentPidProfile->governor.max_throttle / 100.0f;
-    gov.minActiveThrottle = currentPidProfile->governor.min_throttle / 100.0f;
-    gov.maxSpoolupThrottle = gov.maxThrottle;
+    GOV_FOR_EACH_INSTANCE {
+        gov.maxThrottle = currentPidProfile->governor.max_throttle / 100.0f;
+        gov.minActiveThrottle = currentPidProfile->governor.min_throttle / 100.0f;
+        gov.maxSpoolupThrottle = gov.maxThrottle;
+    }
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_MIN_THROTTLE(void)
@@ -1398,7 +1447,9 @@ int get_ADJUSTMENT_GOV_MIN_THROTTLE(void)
 void set_ADJUSTMENT_GOV_MIN_THROTTLE(int value)
 {
     validateAndSetMinMaxThrottle(value, currentPidProfile->governor.max_throttle);
-    gov.minActiveThrottle = currentPidProfile->governor.min_throttle / 100.0f;
+    GOV_FOR_EACH_INSTANCE
+        gov.minActiveThrottle = currentPidProfile->governor.min_throttle / 100.0f;
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_HEADSPEED(void)
@@ -1409,8 +1460,11 @@ int get_ADJUSTMENT_GOV_HEADSPEED(void)
 void set_ADJUSTMENT_GOV_HEADSPEED(int value)
 {
     currentPidProfile->governor.headspeed = value;
-    gov.fullHeadSpeed = constrainf(value, 100, 50000);
-    gov.requestedHeadSpeed = gov.fullHeadSpeed;
+    GOV_FOR_EACH_INSTANCE {
+        gov.fullHeadSpeed = constrainf(value, 100, 50000);
+        gov.requestedHeadSpeed = gov.fullHeadSpeed;
+    }
+    govActiveMotor = 0;
 }
 
 int get_ADJUSTMENT_GOV_YAW_FF(void)
@@ -1421,7 +1475,9 @@ int get_ADJUSTMENT_GOV_YAW_FF(void)
 void set_ADJUSTMENT_GOV_YAW_FF(int value)
 {
     currentPidProfile->governor.yaw_weight = value;
-    gov.yawWeight = value / 100.0f;
+    GOV_FOR_EACH_INSTANCE
+        gov.yawWeight = value / 100.0f;
+    govActiveMotor = 0;
 }
 
 
@@ -1433,29 +1489,38 @@ void set_ADJUSTMENT_GOV_YAW_FF(int value)
 
 void governorUpdate(void)
 {
-    switch (gov.govMode)
+    // Run every governor instance. Instance 0 is always present. Instance 1 is
+    // only meaningful when gov_dual_motor is enabled (see governorInit()); when
+    // disabled its govMode is GOV_MODE_NONE and it simply passes throttle
+    // through, feeding an unused mixer input (ST2) with no effect.
+    for (govActiveMotor = 0; govActiveMotor < GOV_MAX_MOTORS; govActiveMotor++)
     {
-        case GOV_MODE_LIMIT:
-            govUpdateLimitedThrottle();
-            break;
+        switch (gov.govMode)
+        {
+            case GOV_MODE_LIMIT:
+                govUpdateLimitedThrottle();
+                break;
 
-        case GOV_MODE_DIRECT:
-            govDataUpdate();
-            govUpdateDirectState();
-            break;
+            case GOV_MODE_DIRECT:
+                govDataUpdate();
+                govUpdateDirectState();
+                break;
 
-        case GOV_MODE_ELECTRIC:
-        case GOV_MODE_NITRO:
-            govDataUpdate();
-            govUpdateGovernedState();
-            govDebugUpdate();
+            case GOV_MODE_ELECTRIC:
+            case GOV_MODE_NITRO:
+                govDataUpdate();
+                govUpdateGovernedState();
+                if (govActiveMotor == 0)
+                    govDebugUpdate();
+                break;
 
-            break;
-
-        default:
-            gov.throttleOutput = getThrottle();
-            break;
+            default:
+                gov.throttleOutput = getThrottle();
+                break;
+        }
     }
+
+    govActiveMotor = 0;
 }
 
 
@@ -1542,62 +1607,70 @@ static void INIT_CODE govInitTTA(const pidProfile_t *pidProfile)
 
 void INIT_CODE governorInitProfile(const pidProfile_t *pidProfile)
 {
-    if (gov.govMode)
+    // Both governor instances share the exact same profile (headspeed target
+    // and PID gains), so re-init every active instance identically here. This
+    // is what guarantees both motors are commanded to the same RPM.
+    for (govActiveMotor = 0; govActiveMotor < GOV_MAX_MOTORS; govActiveMotor++)
     {
-        validateAndFixGovernorProfile();
+        if (gov.govMode)
+        {
+            validateAndFixGovernorProfile();
 
-        gov.stateResetReq = true;
+            gov.stateResetReq = true;
 
-        gov.useHsAdjustment = (gov.throttleType == GOV_THROTTLE_SWITCH);
-        gov.useFallbackPrecomp = (pidProfile->governor.flags & BIT(GOV_FLAG_FALLBACK_PRECOMP));
-        gov.usePidSpoolup = (pidProfile->governor.flags & BIT(GOV_FLAG_PID_SPOOLUP));
-        gov.useElectricMotor = (gov.govMode == GOV_MODE_ELECTRIC);
-        gov.useDynMinThrottle = (pidProfile->governor.flags & BIT(GOV_FLAG_DYN_MIN_THROTTLE)) && gov.useElectricMotor;
-        gov.useVoltageComp = (pidProfile->governor.flags & BIT(GOV_FLAG_VOLTAGE_COMP)) && (getBatteryVoltageSource() == VOLTAGE_METER_ADC) && gov.useElectricMotor;
-        gov.useAutorotation = (gov.autorotationTimeout > 0);
+            gov.useHsAdjustment = (gov.throttleType == GOV_THROTTLE_SWITCH);
+            gov.useFallbackPrecomp = (pidProfile->governor.flags & BIT(GOV_FLAG_FALLBACK_PRECOMP));
+            gov.usePidSpoolup = (pidProfile->governor.flags & BIT(GOV_FLAG_PID_SPOOLUP));
+            gov.useElectricMotor = (gov.govMode == GOV_MODE_ELECTRIC);
+            gov.useDynMinThrottle = (pidProfile->governor.flags & BIT(GOV_FLAG_DYN_MIN_THROTTLE)) && gov.useElectricMotor;
+            gov.useVoltageComp = (pidProfile->governor.flags & BIT(GOV_FLAG_VOLTAGE_COMP)) && (getBatteryVoltageSource() == VOLTAGE_METER_ADC) && gov.useElectricMotor;
+            gov.useAutorotation = (gov.autorotationTimeout > 0);
 
-        gov.K  = pidProfile->governor.gain / 100.0f;
-        gov.Kp = pidProfile->governor.p_gain / 10.0f;
-        gov.Ki = pidProfile->governor.i_gain / 10.0f;
-        gov.Kd = pidProfile->governor.d_gain / 1000.0f;
-        gov.Kf = pidProfile->governor.f_gain / 100.0f;
+            gov.K  = pidProfile->governor.gain / 100.0f;
+            gov.Kp = pidProfile->governor.p_gain / 10.0f;
+            gov.Ki = pidProfile->governor.i_gain / 10.0f;
+            gov.Kd = pidProfile->governor.d_gain / 1000.0f;
+            gov.Kf = pidProfile->governor.f_gain / 100.0f;
 
-        gov.maxP = pidProfile->governor.p_limit / 100.0f;
-        gov.maxI = pidProfile->governor.i_limit / 100.0f;
-        gov.maxD = pidProfile->governor.d_limit / 100.0f;
-        gov.maxF = pidProfile->governor.f_limit / 100.0f;
+            gov.maxP = pidProfile->governor.p_limit / 100.0f;
+            gov.maxI = pidProfile->governor.i_limit / 100.0f;
+            gov.maxD = pidProfile->governor.d_limit / 100.0f;
+            gov.maxF = pidProfile->governor.f_limit / 100.0f;
 
-        gov.minP = -gov.maxP;
-        gov.minI = -gov.maxI;
-        gov.minD = -gov.maxD;
-        gov.minF = 0;
+            gov.minP = -gov.maxP;
+            gov.minI = -gov.maxI;
+            gov.minD = -gov.maxD;
+            gov.minF = 0;
 
-        gov.maxThrottle = pidProfile->governor.max_throttle / 100.0f;
-        gov.minActiveThrottle = pidProfile->governor.min_throttle / 100.0f;
+            gov.maxThrottle = pidProfile->governor.max_throttle / 100.0f;
+            gov.minActiveThrottle = pidProfile->governor.min_throttle / 100.0f;
 
-        gov.minSpoolupThrottle = gov.idleThrottle;
-        gov.maxSpoolupThrottle = gov.maxThrottle;
+            gov.minSpoolupThrottle = gov.idleThrottle;
+            gov.maxSpoolupThrottle = gov.maxThrottle;
 
-        gov.voltageCompGain = 1.0f;
+            gov.voltageCompGain = 1.0f;
 
-        gov.fallbackRatio = (100 - constrain(pidProfile->governor.fallback_drop, 0, 50)) / 100.0f;
+            gov.fallbackRatio = (100 - constrain(pidProfile->governor.fallback_drop, 0, 50)) / 100.0f;
 
-        gov.dynMinThrottle = pidProfile->governor.dyn_min_throttle / 100.0f;
+            gov.dynMinThrottle = pidProfile->governor.dyn_min_throttle / 100.0f;
 
-        gov.yawWeight = pidProfile->governor.yaw_weight / 100.0f;
-        gov.cyclicWeight = pidProfile->governor.cyclic_weight / 100.0f;
-        gov.collectiveWeight = pidProfile->governor.collective_weight / 100.0f;
-        gov.collectiveCurve = pidProfile->governor.collective_curve;
+            gov.yawWeight = pidProfile->governor.yaw_weight / 100.0f;
+            gov.cyclicWeight = pidProfile->governor.cyclic_weight / 100.0f;
+            gov.collectiveWeight = pidProfile->governor.collective_weight / 100.0f;
+            gov.collectiveCurve = pidProfile->governor.collective_curve;
 
-        gov.fullHeadSpeed = constrainf(pidProfile->governor.headspeed, 100, 50000);
-        gov.fullHeadSpeedRatio = 1.0f;
-        gov.requestedHeadSpeed = gov.fullHeadSpeed;
+            gov.fullHeadSpeed = constrainf(pidProfile->governor.headspeed, 100, 50000);
+            gov.fullHeadSpeedRatio = 1.0f;
+            gov.requestedHeadSpeed = gov.fullHeadSpeed;
 
-        gov.motorRPMGlitchDelta = (gov.fullHeadSpeed / gov.mainGearRatio) * GOV_HS_GLITCH_DELTA;
-        gov.motorRPMGlitchLimit = (gov.fullHeadSpeed / gov.mainGearRatio) * GOV_HS_GLITCH_LIMIT;
+            gov.motorRPMGlitchDelta = (gov.fullHeadSpeed / gov.mainGearRatio) * GOV_HS_GLITCH_DELTA;
+            gov.motorRPMGlitchLimit = (gov.fullHeadSpeed / gov.mainGearRatio) * GOV_HS_GLITCH_LIMIT;
 
-        govInitTTA(pidProfile);
+            govInitTTA(pidProfile);
+        }
     }
+
+    govActiveMotor = 0;
 }
 
 static float INIT_CODE govCalcRate(uint16_t param, uint16_t min, uint16_t max)
@@ -1614,60 +1687,73 @@ void INIT_CODE governorInit(const pidProfile_t *pidProfile)
     {
         validateAndFixGovernorConfig();
 
-        gov.state = GOV_STATE_THROTTLE_OFF;
-
-        gov.govMode = governorConfig()->gov_mode;
-        gov.throttleType = governorConfig()->gov_throttle_type;
-
-        switch (gov.govMode)
+        for (govActiveMotor = 0; govActiveMotor < GOV_MAX_MOTORS; govActiveMotor++)
         {
-            case GOV_MODE_LIMIT:
-            case GOV_MODE_DIRECT:
-                break;
-            case GOV_MODE_ELECTRIC:
-            case GOV_MODE_NITRO:
-                if (!isMotorFastRpmSourceActive(0)) {
-                    setArmingDisabled(ARMING_DISABLED_GOVERNOR);
-                    setArmingDisabled(ARMING_DISABLED_RPM_SIGNAL);
+            // Instance 0 (the master) always follows gov_mode. Instance 1 (a
+            // second motor/ESC) only follows gov_mode when gov_dual_motor is
+            // enabled and a second motor actually exists; otherwise it stays
+            // disabled (GOV_MODE_NONE) so single-motor setups (including a
+            // motorized tail on motor 1) are completely unaffected.
+            const bool motorGoverned = (govActiveMotor == 0) ||
+                (governorConfig()->gov_dual_motor && getMotorCount() > govActiveMotor);
+
+            gov.state = GOV_STATE_THROTTLE_OFF;
+
+            gov.govMode = motorGoverned ? governorConfig()->gov_mode : GOV_MODE_NONE;
+            gov.throttleType = governorConfig()->gov_throttle_type;
+
+            switch (gov.govMode)
+            {
+                case GOV_MODE_LIMIT:
+                case GOV_MODE_DIRECT:
+                    break;
+                case GOV_MODE_ELECTRIC:
+                case GOV_MODE_NITRO:
+                    if (!isMotorFastRpmSourceActive(govActiveMotor)) {
+                        setArmingDisabled(ARMING_DISABLED_GOVERNOR);
+                        setArmingDisabled(ARMING_DISABLED_RPM_SIGNAL);
+                        gov.govMode = GOV_MODE_NONE;
+                    }
+                    break;
+                default:
                     gov.govMode = GOV_MODE_NONE;
-                }
-                break;
-            default:
-                gov.govMode = GOV_MODE_NONE;
-                break;
+                    break;
+            }
+
+            if (gov.govMode)
+            {
+                gov.mainGearRatio = getMainGearRatio();
+
+                gov.throttleStartupRate  = govCalcRate(governorConfig()->gov_startup_time, 1, 600);
+                gov.throttleSpoolupRate  = govCalcRate(governorConfig()->gov_spoolup_time, 1, 600);
+                gov.throttleTrackingRate = govCalcRate(governorConfig()->gov_tracking_time, 1, 600);
+                gov.throttleRecoveryRate = govCalcRate(governorConfig()->gov_recovery_time, 1, 600);
+                gov.throttleSpooldownRate  = govCalcRate(governorConfig()->gov_spooldown_time, 1, 600);
+
+                gov.throttleHoldTimeout  = governorConfig()->gov_throttle_hold_timeout * 100;
+                gov.autorotationTimeout = governorConfig()->gov_autorotation_timeout * 1000;
+
+                gov.idleThrottle = governorConfig()->gov_idle_throttle / 1000.0f;
+                gov.autoThrottle = governorConfig()->gov_auto_throttle / 1000.0f;
+
+                gov.handoverThrottle = governorConfig()->gov_handover_throttle / 100.0f;
+
+                for (int i=0; i<GOV_THROTTLE_CURVE_POINTS; i++)
+                    gov.throttleCurve[i] = governorConfig()->gov_bypass_throttle[i] / 200.0f;
+
+                difFilterInit(&gov.differentiator, governorConfig()->gov_d_filter / 10.0f, gyro.targetRateHz);
+
+                ewma1FilterInit(&gov.motorRPMKFilter, GOV_RPM_K_CUTOFF, gyro.targetRateHz);
+
+                lowpassFilterInit(&gov.motorVoltageFilter, LPF_PT2, governorConfig()->gov_pwr_filter, gyro.targetRateHz, 0);
+                lowpassFilterInit(&gov.motorRPMFilter, LPF_PT2, governorConfig()->gov_rpm_filter, gyro.targetRateHz, 0);
+                lowpassFilterInit(&gov.ttaFilter, LPF_PT2, governorConfig()->gov_tta_filter, gyro.targetRateHz, 0);
+                lowpassFilterInit(&gov.precompFilter, LPF_PT2, governorConfig()->gov_ff_filter, gyro.targetRateHz, 0);
+            }
         }
 
-        if (gov.govMode)
-        {
-            gov.mainGearRatio = getMainGearRatio();
+        govActiveMotor = 0;
 
-            gov.throttleStartupRate  = govCalcRate(governorConfig()->gov_startup_time, 1, 600);
-            gov.throttleSpoolupRate  = govCalcRate(governorConfig()->gov_spoolup_time, 1, 600);
-            gov.throttleTrackingRate = govCalcRate(governorConfig()->gov_tracking_time, 1, 600);
-            gov.throttleRecoveryRate = govCalcRate(governorConfig()->gov_recovery_time, 1, 600);
-            gov.throttleSpooldownRate  = govCalcRate(governorConfig()->gov_spooldown_time, 1, 600);
-
-            gov.throttleHoldTimeout  = governorConfig()->gov_throttle_hold_timeout * 100;
-            gov.autorotationTimeout = governorConfig()->gov_autorotation_timeout * 1000;
-
-            gov.idleThrottle = governorConfig()->gov_idle_throttle / 1000.0f;
-            gov.autoThrottle = governorConfig()->gov_auto_throttle / 1000.0f;
-
-            gov.handoverThrottle = governorConfig()->gov_handover_throttle / 100.0f;
-
-            for (int i=0; i<GOV_THROTTLE_CURVE_POINTS; i++)
-                gov.throttleCurve[i] = governorConfig()->gov_bypass_throttle[i] / 200.0f;
-
-            difFilterInit(&gov.differentiator, governorConfig()->gov_d_filter / 10.0f, gyro.targetRateHz);
-
-            ewma1FilterInit(&gov.motorRPMKFilter, GOV_RPM_K_CUTOFF, gyro.targetRateHz);
-
-            lowpassFilterInit(&gov.motorVoltageFilter, LPF_PT2, governorConfig()->gov_pwr_filter, gyro.targetRateHz, 0);
-            lowpassFilterInit(&gov.motorRPMFilter, LPF_PT2, governorConfig()->gov_rpm_filter, gyro.targetRateHz, 0);
-            lowpassFilterInit(&gov.ttaFilter, LPF_PT2, governorConfig()->gov_tta_filter, gyro.targetRateHz, 0);
-            lowpassFilterInit(&gov.precompFilter, LPF_PT2, governorConfig()->gov_ff_filter, gyro.targetRateHz, 0);
-
-            governorInitProfile(pidProfile);
-        }
+        governorInitProfile(pidProfile);
     }
 }
