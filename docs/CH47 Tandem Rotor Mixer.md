@@ -231,6 +231,27 @@ the same headspeed.
 
 ### 5.4 ESC / motor setup
 
+On the Nexus F7/X/XR flight controller the front ESC (`M1`) is wired to the board's **ESC**
+motor pad and the rear ESC (`M2`) is wired to the **TAIL** motor pad - no `motor`/`servo`
+remap is needed, since the mixer rules above already target `M1` for the front rotor and
+`M2` for the rear rotor. Additionally, the front ESC's **TLM** pad is wired to the flight
+controller's **TLM** pad for ESC telemetry (voltage/current/temperature); the rear ESC has
+no TLM wire connected, since RPM feedback for both rotors already comes from bidirectional
+DShot on the motor signal wires.
+
+```mermaid
+graph LR
+    BAT["Battery"] --> ESCF["Front ESC<br/>(Goosky S2 Max/Ultra)"]
+    BAT --> ESCR["Rear ESC<br/>(Goosky S2 Max/Ultra)"]
+
+    FC["Nexus F7/X/XR"] -->|"ESC pad<br/>(DShot300, bidir)"| ESCF
+    FC -->|"TAIL pad<br/>(DShot300, bidir)"| ESCR
+    ESCF -->|"TLM pad"| FC
+
+    ESCF --> MF["Front motor M1<br/>(Goosky E2)"]
+    ESCR --> MR["Rear motor M2<br/>(Goosky E2)"]
+```
+
 ```
 set motor_pwm_protocol = DSHOT300
 set dshot_bidir = ON
