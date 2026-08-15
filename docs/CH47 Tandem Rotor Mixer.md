@@ -27,6 +27,60 @@ The two SBUS expanders are the "2x 4Ch SBUS expanders" referenced throughout thi
 the front swash, the other to `CH5-8` for the rear swash, both wired to the same SBUS
 output of the flight controller.
 
+### 1.1 Physical layout: rotor separation (no rotor sync)
+
+A real CH-47 lets its rotor discs overlap (~30%) because a synchronizing shaft/gearbox
+keeps the two rotors at a fixed relative phase angle, so the blades interleave like
+scissors and can never occupy the same space at the same time. This build uses two
+**independent** motors/governors with no mechanical or electronic phase lock, so that
+trick is not available - at any instant the two rotors can be at *any* relative phase,
+including the worst case of both blades pointing straight at each other. The physical
+layout must therefore guarantee:
+
+> **The two rotor discs must never touch, under any phase relationship.** Design this as
+> two completely separate, non-overlapping rotor systems, not a scaled-overlap Chinook.
+
+Reference dimensions for a stock Goosky S2/S2 Max/S2 Ultra rotor system:
+
+| Spec | Value |
+| ---- | ----- |
+| Main rotor diameter (`D`) | ~440-444 mm |
+| Main rotor radius (`R`) | ~220-222 mm |
+
+**Horizontal spacing (mast-to-mast, fore/aft):** the bare minimum with zero margin is
+`R_front + R_rear = D` (≈440 mm for two equal stock rotors). Build in margin for blade
+flap/coning, gusts, fuselage/boom flex and build tolerance:
+
+```
+horizontal spacing = 1.2 - 1.3 x D  ≈  530 - 575 mm (mast centerline to mast centerline)
+```
+
+**Vertical offset (rear rotor plane raised):** add vertical stagger as a second,
+independent layer of protection, so a single-axis error (e.g. boom sag, a hard pitch
+excursion) doesn't remove all your margin at once. As a sanity check, 8° of blade flap
+moves the tip vertically by `R x sin(8°) ≈ 222 mm x 0.139 ≈ 31 mm`, so a stagger smaller
+than that buys almost nothing:
+
+```
+vertical stagger = 60 - 80 mm, rear rotor tip-path-plane above the front rotor's
+```
+
+Raising the rear rotor also lifts it partly clear of the front rotor's direct downwash,
+which helps pitch/yaw stability since there is no control-law coupling between the two
+independent governors to compensate for wake interaction.
+
+**Scale:** keep the stock S2 blades/drivetrain (no rotor re-engineering needed) and get
+the required separation from a stretched boom/frame joining the two chassis:
+
+- Rotor spacing (mast-to-mast): ~550 mm
+- Vertical stagger: ~70 mm, rear higher
+- Overall tip-to-tip length (nose rotor overhang + spacing + tail rotor overhang):
+  ≈ 550 + 440 ≈ 990 mm
+
+This puts the model at roughly **1:30-1:40 scale** versus a real CH-47 (18.29 m rotor
+diameter, ~30 m rotor-tip-to-tip length) - a reasonable "big micro" tandem, just with
+non-overlapping discs instead of the real aircraft's intermeshing geometry.
+
 ## 2. How the Rotorflight mixer engine works
 
 Rotorflight does not use fixed "mixer presets" (TRI/QUAD/HELI120/...) like old Cleanflight.
