@@ -84,6 +84,12 @@ Each swashplate uses the same servo roles as a normal 120° CCPM setup:
 - **Servo B** – arm at +120° (positive roll & yaw contribution)
 - **Servo C** – arm at −120° (negative roll & yaw contribution)
 
+Physical arrangement of both swashplates as seen from above, nose pointing up (forward
+flight direction) - Servo A sits at the rear of each swash (on the fuselage centerline),
+with Servo B/C at ±120° from it, front-right/front-left respectively:
+
+![CH-47 swashplate servo layout, top view](assets/images/ch47-swashplate-layout.svg)
+
 Since all 6 servos are driven over **SBUS**, they must use servo slots `S9`-`S26`
 (slots `S1`-`S8` are PWM-pin only, see [`Mixer.md`](Mixer.md) / [`Serial.md`](Serial.md)).
 Servo slot `Sn` maps to SBUS-output channel `n - 9` (0-based), i.e. `S9` = SBUS channel 1,

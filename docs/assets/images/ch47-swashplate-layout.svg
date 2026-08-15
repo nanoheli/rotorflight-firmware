@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 640" font-family="sans-serif">
+  <!-- Flight direction arrow (top view, nose up) -->
+  <line x1="230" y1="70" x2="230" y2="15" stroke="black" stroke-width="3"/>
+  <polygon points="230,5 222,25 238,25" fill="black"/>
+  <text x="240" y="40" font-size="16" font-weight="bold">NOSE / forward flight</text>
+
+  <!-- Fuselage centerline -->
+  <line x1="230" y1="80" x2="230" y2="560" stroke="black" stroke-width="1" stroke-dasharray="6,6"/>
+
+  <!-- Front swashplate -->
+  <text x="230" y="100" font-size="18" font-weight="bold" text-anchor="middle">Front swashplate (M1 rotor)</text>
+  <circle cx="230" cy="220" r="110" fill="none" stroke="black" stroke-width="2"/>
+  <circle cx="230" cy="220" r="6" fill="black"/>
+
+  <!-- Front: Servo A at 6 o'clock (rear of swash, roll-axis / no roll authority) -->
+  <circle cx="230" cy="330" r="14" fill="#cce5ff" stroke="black" stroke-width="2"/>
+  <text x="230" y="335" font-size="13" text-anchor="middle" font-weight="bold">S9</text>
+  <text x="230" y="360" font-size="13" text-anchor="middle">A (collective/pitch only)</text>
+
+  <!-- Front: Servo B at 2 o'clock (+120 from A, front-right) -->
+  <circle cx="325" cy="165" r="14" fill="#cce5ff" stroke="black" stroke-width="2"/>
+  <text x="325" y="170" font-size="13" text-anchor="middle" font-weight="bold">S10</text>
+  <text x="325" y="140" font-size="13" text-anchor="middle">B (+roll/+yaw)</text>
+
+  <!-- Front: Servo C at 10 o'clock (-120 from A, front-left) -->
+  <circle cx="135" cy="165" r="14" fill="#cce5ff" stroke="black" stroke-width="2"/>
+  <text x="135" y="170" font-size="13" text-anchor="middle" font-weight="bold">S11</text>
+  <text x="135" y="140" font-size="13" text-anchor="middle">C (-roll/-yaw)</text>
+
+  <!-- Rear swashplate -->
+  <text x="230" y="440" font-size="18" font-weight="bold" text-anchor="middle">Rear swashplate (M2 rotor)</text>
+  <circle cx="230" cy="500" r="110" fill="none" stroke="black" stroke-width="2"/>
+  <circle cx="230" cy="500" r="6" fill="black"/>
+
+  <!-- Rear: Servo A at 6 o'clock -->
+  <circle cx="230" cy="610" r="14" fill="#ffe0cc" stroke="black" stroke-width="2"/>
+  <text x="230" y="615" font-size="13" text-anchor="middle" font-weight="bold">S13</text>
+  <text x="230" y="637" font-size="13" text-anchor="middle">A (collective/pitch only)</text>
+
+  <!-- Rear: Servo B at 2 o'clock -->
+  <circle cx="325" cy="445" r="14" fill="#ffe0cc" stroke="black" stroke-width="2"/>
+  <text x="325" y="450" font-size="13" text-anchor="middle" font-weight="bold">S14</text>
+  <text x="325" y="420" font-size="13" text-anchor="middle">B (+roll/-yaw)</text>
+
+  <!-- Rear: Servo C at 10 o'clock -->
+  <circle cx="135" cy="445" r="14" fill="#ffe0cc" stroke="black" stroke-width="2"/>
+  <text x="135" y="450" font-size="13" text-anchor="middle" font-weight="bold">S15</text>
+  <text x="135" y="420" font-size="13" text-anchor="middle">C (-roll/+yaw)</text>
+</svg>
