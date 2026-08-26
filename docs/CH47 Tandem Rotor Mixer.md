@@ -345,7 +345,53 @@ the same target with identical tuning, both rotors converge to the same RPM even
 each ESC is driven independently. See [`Governor.md`](Governor.md) for details on the
 individual `gov_*` parameters.
 
-### 5.6 Save
+### 5.6 Disable single-swash PID precomp/coupling terms
+
+Several PID profile defaults exist to compensate mechanical/aerodynamic effects that are
+specific to a **single main rotor + reactive-torque tail rotor** airframe. On the Chinook,
+`SY` (yaw) and `SP` (pitch) are repurposed by the mixer rules above to mean *differential
+lateral cyclic* and *differential collective* between the two rotors, not "tail rotor
+thrust" or "single swashplate flap-back" - so these defaults inject spurious corrections
+onto axes that no longer mean what the firmware assumes they mean:
+
+```
+set cyclic_cross_coupling_gain = 0
+set yaw_collective_ff_gain = 0
+set yaw_cyclic_ff_gain = 0
+```
+
+- `cyclic_cross_coupling_gain` (default `50`) compensates the roll→pitch blade-flapping
+  coupling of *one* CCPM swashplate by adding directly onto the PITCH PID output. Since
+  `SP` is differential collective here, this would inject unwanted differential collective
+  (a pitch moment) every time the roll stick moves. It is applied unconditionally,
+  independent of `swash_type`, so it is not a no-op like the swash-generation settings
+  below - it must be explicitly disabled.
+- `yaw_collective_ff_gain` (default `60`) and `yaw_cyclic_ff_gain` (default `10`) feed a
+  single-main-rotor anti-torque model (reaction torque from collective/cyclic changes)
+  straight onto the YAW PID output, i.e. onto `SY` → differential lateral cyclic. The two
+  independent, counter-rotating rotors' reaction torques largely cancel mechanically and
+  are not related to each other's collective/cyclic input the way a main rotor and its
+  tail rotor are, so this feedforward doesn't correspond to anything physical here. Verify
+  in flight and retune away from `0` only if testing shows a real, reproducible need.
+
+The following related settings do **not** need to be touched - they are already inert for
+this build by construction, not just by coincidence of their default value:
+
+- `tail_rotor_mode`, `tail_motor_idle`, `tail_center_trim` - the motorized/bidirectional
+  tail-motor code in the mixer only runs when `tail_rotor_mode` is `MOTORIZED` or
+  `BIDIRECTIONAL`; leaving it at `VARIABLE` (the default) means that code never executes.
+- `swash_tta_precomp` - only used inside the automatic swash-generation code path, which
+  requires `swash_type != NONE`. With `swash_type = NONE` it can never run.
+- `gov_tta_gain` / `gov_tta_limit` (Torque Assist) - gated off whenever `gov_tta_gain = 0`
+  (the default). It models a single motor's throttle needing a boost when the tail rotor
+  draws power for a yaw command - not applicable to two independently governed rotors, so
+  leave it at `0` rather than enabling it as a generic "yaw compensation."
+- `rescue_mode` defaults to `OFF`, so `rescue_flip` (default `ON`) has no effect unless you
+  turn rescue on. If you do enable rescue mode on this airframe, set `rescue_flip = OFF`
+  first - the inverted-recovery flip maneuver assumes a single acrobatic heli swash and is
+  not something this twin-boom, non-overlapping-rotor layout is built to survive.
+
+### 5.7 Save
 
 ```
 save
